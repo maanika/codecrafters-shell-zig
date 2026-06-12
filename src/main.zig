@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const Command = enum {
+    exit,
+    echo,
+};
+
 pub fn main(init: std.process.Init) !void {
     var stdin_buffer: [4096]u8 = undefined;
     var stdin = std.Io.File.stdin().readerStreaming(init.io, &stdin_buffer);
@@ -13,14 +18,14 @@ pub fn main(init: std.process.Init) !void {
         var iter = std.mem.splitScalar(u8, input.?, ' ');
 
         const command: []const u8 = iter.first();
-
-        if (std.mem.eql(u8, command, "exit")) {
-            return;
-        }
-
-        if (std.mem.eql(u8, command, "echo")) {
-            try stdout.interface.print("{s}\n", .{iter.rest()});
-            continue;
+        const command_enum = std.meta.stringToEnum(Command, command) orelse continue;
+        switch (command_enum) {
+            .exit => {
+                return;
+            },
+            .echo => {
+                try stdout.interface.print("{s}\n", .{iter.rest()});
+            },
         }
 
         try stdout.interface.print("{s}: command not found\n", .{input orelse ""});

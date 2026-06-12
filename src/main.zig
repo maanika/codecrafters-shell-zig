@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
         }
 
         if ((command.?.len >= 4) and std.mem.eql(u8, command.?[0..4], "echo")) {
-            try stdout.interface.print("{s}\n", .{command.?});
+            try stdout.interface.print("{s}\n", .{command.?[5..]});
         } else {
             try stdout.interface.print("{s}: command not found\n", .{command.?});
         }

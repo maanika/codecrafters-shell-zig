@@ -14,7 +14,10 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
 
-        try stdout.interface.print("{s}: command not found\n", .{command.?});
+        if ((command.?.len >= 4) and std.mem.eql(u8, command.?[0..4], "echo")) {
+            try stdout.interface.print("{s}\n", .{command.?});
+        } else {
+            try stdout.interface.print("{s}: command not found\n", .{command.?});
+        }
     }
-
 }

@@ -25,6 +25,7 @@ pub fn main(init: std.process.Init) !void {
             },
             .echo => {
                 try stdout.interface.print("{s}\n", .{iter.rest()});
+                continue;
             },
         }
 

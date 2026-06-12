@@ -18,7 +18,12 @@ pub fn main(init: std.process.Init) !void {
         var iter = std.mem.splitScalar(u8, input.?, ' ');
 
         const command: []const u8 = iter.first();
-        const command_enum = std.meta.stringToEnum(Command, command) orelse continue;
+
+        const command_enum = std.meta.stringToEnum(Command, command) orelse {
+            try stdout.interface.print("{s}: command not found\n", .{input orelse ""});
+            continue;
+        };
+
         switch (command_enum) {
             .exit => {
                 return;
@@ -28,7 +33,5 @@ pub fn main(init: std.process.Init) !void {
                 continue;
             },
         }
-
-        try stdout.interface.print("{s}: command not found\n", .{input orelse ""});
     }
 }

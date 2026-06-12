@@ -8,16 +8,21 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         try stdout.interface.print("$ ", .{});
-        const command: ?[]u8 = try stdin.interface.takeDelimiter('\n');
+        const input: ?[]u8 = try stdin.interface.takeDelimiter('\n');
 
-        if (std.mem.eql(u8, command.?, "exit")) {
+        var iter = std.mem.splitScalar(u8, input.?, ' ');
+
+        const command: []const u8 = iter.first();
+
+        if (std.mem.eql(u8, command, "exit")) {
             return;
         }
 
-        if ((command.?.len >= 4) and std.mem.eql(u8, command.?[0..4], "echo")) {
-            try stdout.interface.print("{s}\n", .{command.?[5..]});
-        } else {
-            try stdout.interface.print("{s}: command not found\n", .{command.?});
+        if (std.mem.eql(u8, command, "echo")) {
+            try stdout.interface.print("{s}\n", .{iter.rest()});
+            continue;
         }
+
+        try stdout.interface.print("{s}: command not found\n", .{input orelse ""});
     }
 }

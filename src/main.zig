@@ -1,8 +1,9 @@
 const std = @import("std");
 
-const Command = enum {
+const BuiltinCommand = enum {
     exit,
     echo,
+    type,
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -12,15 +13,17 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(init.io, &.{});
 
     while (true) {
-        try stdout.interface.print("$ ", .{});
-        const input: ?[]u8 = try stdin.interface.takeDelimiter('\n');
+        try stdout.interface.print("\n$ ", .{});
+        const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse {
+            continue;
+        };
 
         var iter = std.mem.splitScalar(u8, input.?, ' ');
 
         const command: []const u8 = iter.first();
 
-        const command_enum = std.meta.stringToEnum(Command, command) orelse {
-            try stdout.interface.print("{s}: command not found\n", .{input orelse ""});
+        const command_enum = std.meta.stringToEnum(BuiltinCommand, command) orelse {
+            try stdout.interface.print("{s}: command not found", .{input.?});
             continue;
         };
 
@@ -29,8 +32,16 @@ pub fn main(init: std.process.Init) !void {
                 return;
             },
             .echo => {
-                try stdout.interface.print("{s}\n", .{iter.rest()});
+                try stdout.interface.print("{s}", .{iter.rest()});
                 continue;
+            },
+            .type => {
+                const argument: []const u8 = iter.rest();
+                _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
+                    try stdout.interface.print("{s}: not found", .{argument});
+                    continue;
+                };
+                try stdout.interface.print("{s} is a shell builtin", .{argument});
             },
         }
     }

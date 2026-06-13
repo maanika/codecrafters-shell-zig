@@ -13,7 +13,7 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(init.io, &.{});
 
     while (true) {
-        try stdout.interface.print("\n$ ", .{});
+        try stdout.interface.print("$ ", .{});
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse {
             continue;
         };
@@ -23,7 +23,7 @@ pub fn main(init: std.process.Init) !void {
         const command: []const u8 = iter.first();
 
         const command_enum = std.meta.stringToEnum(BuiltinCommand, command) orelse {
-            try stdout.interface.print("{s}: command not found", .{input.?});
+            try stdout.interface.print("{s}: command not found\n", .{input.?});
             continue;
         };
 
@@ -32,16 +32,16 @@ pub fn main(init: std.process.Init) !void {
                 return;
             },
             .echo => {
-                try stdout.interface.print("{s}", .{iter.rest()});
+                try stdout.interface.print("{s}\n", .{iter.rest()});
                 continue;
             },
             .type => {
                 const argument: []const u8 = iter.rest();
                 _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
-                    try stdout.interface.print("{s}: not found", .{argument});
+                    try stdout.interface.print("{s}: not found\n", .{argument});
                     continue;
                 };
-                try stdout.interface.print("{s} is a shell builtin", .{argument});
+                try stdout.interface.print("{s} is a shell builtin\n", .{argument});
             },
         }
     }

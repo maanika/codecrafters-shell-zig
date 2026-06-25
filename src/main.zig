@@ -112,12 +112,15 @@ fn getCurrentWorkingDir(io: anytype, buffer: *[std.Io.Dir.max_path_bytes]u8) ?us
 }
 
 fn changeDirectory(io: anytype, name: []const u8) bool {
-    if (!std.fs.path.isAbsolute(name)) {
-        return false;
+    var dir: ?std.Io.Dir = null;
+    // TODO: clean this up (not use optional 
+    if (std.fs.path.isAbsolute(name)) {
+        dir = std.Io.Dir.openDirAbsolute(io, name, .{}) catch return false;
+    } else {
+        dir = std.Io.Dir.cwd().openDir(io, name, .{}) catch return false;
     }
-    var dir = std.Io.Dir.openDirAbsolute(io, name, .{}) catch return false;
-    std.process.setCurrentDir(io, dir) catch return false;
-    defer dir.close(io);
+    std.process.setCurrentDir(io, dir.?) catch return false;
+    defer dir.?.close(io);
     return true;
 }
 

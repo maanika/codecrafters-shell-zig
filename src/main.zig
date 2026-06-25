@@ -6,6 +6,12 @@ const BuiltinCommand = enum {
     type,
 };
 
+fn canExecute(path: []const u8, io: std.Io) bool {
+    std.Io.Dir.cwd().access(io, path, .{.execute = true }) catch return false;
+    return true;
+}
+
+
 pub fn main(init: std.process.Init) !void {
     var stdin_buffer: [4096]u8 = undefined;
     var stdin = std.Io.File.stdin().readerStreaming(init.io, &stdin_buffer);
@@ -60,14 +66,14 @@ pub fn main(init: std.process.Init) !void {
 
                         while (try dir_iterate.next(init.io)) |entry| {
                             // Add execution check
-                            if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name))) {
-                                var file = try std.Io.Dir.cwd().openFile(init.io, path, .{.mode = .read_only});
-                                defer file.close(init.io);
-                                const file_stat = try file.stat(init.io);
-                                const permissions = file_stat.permissions & 0o0001;
-                                if (permissions != 0o0001) {
-                                    continue;
-                                }
+                            if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name)) and canExecute(path, init.io)) {
+                                // var file = try std.Io.Dir.cwd().openFile(init.io, path, .{.mode = .read_only});
+                                // defer file.close(init.io);
+                                // const file_stat = try file.stat(init.io);
+                                // const permissions = file_stat.permissions & 0o0001;
+                                // if (permissions != 0o0001) {
+                                //     continue;
+                                // }
 
                                 try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
                                 found_file = true;

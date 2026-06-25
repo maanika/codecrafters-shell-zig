@@ -76,6 +76,7 @@ pub fn main(init: std.process.Init) !void {
                         //     }
                         // }
                         if (fileExists(dir, init.io, argument) and canExecute(dir, init.io, argument)) {
+                            try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, argument });
                             break :iterate_dirs true;
                         }
                     } else false;

@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const BuiltinCommand = enum {
+const BuiltInCommand = enum {
     exit,
     echo,
     type,
@@ -54,14 +54,15 @@ pub fn main(init: std.process.Init) !void {
         const command: []const u8 = iter.first();
         if (command.len == 0) continue;
 
-        // Check if command is an in-build command
-        const command_enum = std.meta.stringToEnum(BuiltinCommand, command) orelse {
-            // Only supporting in-built commands right now
+        // Check if command is an builtin command
+        const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
+            // determine if commnand is an executable
+            // if yes -> execute the program (passing arguments from the command line)
+            
             try stdout.interface.print("{s}: command not found\n", .{input.?});
             continue;
         };
 
-        const argument: []const u8 = iter.rest();
 
         switch (command_enum) {
             .exit => {
@@ -71,9 +72,10 @@ pub fn main(init: std.process.Init) !void {
                 try stdout.interface.print("{s}\n", .{iter.rest()});
             },
             .type => {
+                const argument: []const u8 = iter.rest();
                 //TODO: use a cleaner API for this
-                _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
-                    const path = findExecutableFromPATH(io, path_env, argument) catch null;
+                _ = std.meta.stringToEnum(BuiltInCommand, argument) orelse {
+                    const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
 
                     if (path) |p| {
                         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, p, argument });

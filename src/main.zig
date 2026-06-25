@@ -17,6 +17,24 @@ fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
     return true;
 }
 
+const MyErrors = error{
+    NotFound,
+};
+
+fn findExecutableFromPATH(io: std.Io, path_env: []const u8, find: []const u8) MyErrors![]const u8 {
+    const path_sep = if (builtin.os.tag == .windows) ';' else ':';
+    var dirs = std.mem.splitScalar(u8, path_env, path_sep);
+
+    while (dirs.next()) |path| {
+        var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch continue;
+        defer dir.close(io);
+        if (fileExists(dir, io, find) and canExecute(dir, io, find)) {
+            return path;
+        }
+    }
+    return MyErrors.NotFound;
+}
+
 pub fn main(init: std.process.Init) !void {
     var stdin_buffer: [4096]u8 = undefined;
     var stdin = std.Io.File.stdin().readerStreaming(init.io, &stdin_buffer);
@@ -61,29 +79,30 @@ pub fn main(init: std.process.Init) !void {
             .type => {
                 //TODO: use a cleaner API for this
                 _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
-                    const path_sep = if (builtin.os.tag == .windows) ';' else ':';
-                    var dirs = std.mem.splitScalar(u8, path_env, path_sep);
-                    
-                    const found: bool = iterate_dirs: while (dirs.next()) |path| {
-                        var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
-                        defer dir.close(init.io);
-                        // var dir_iterate = dir.iterate();
-                        //
-                        // while (try dir_iterate.next(init.io)) |entry| {
-                        //     if (entry.kind == .file and std.mem.eql(u8, argument, entry.name) and canExecute(dir, init.io, entry.name)) {
-                        //         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
-                        //         break :iterate_dirs true;
-                        //     }
-                        // }
-                        if (fileExists(dir, init.io, argument) and canExecute(dir, init.io, argument)) {
-                            try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, argument });
-                            break :iterate_dirs true;
-                        }
-                    } else false;
+                    // const path_sep = if (builtin.os.tag == .windows) ';' else ':';
+                    // var dirs = std.mem.splitScalar(u8, path_env, path_sep);
+                    //
+                    // const found: bool = iterate_dirs: while (dirs.next()) |path| {
+                    //     var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
+                    //     defer dir.close(init.io);
+                    //     if (fileExists(dir, init.io, argument) and canExecute(dir, init.io, argument)) {
+                    //         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, argument });
+                    //         break :iterate_dirs true;
+                    //     }
+                    // } else false;
+                    //
+                    // if (!found) {
+                    //     try stdout.interface.print("{s}: not found\n", .{argument});
+                    // }
 
-                    if (!found) {
+                    const path = findExecutableFromPATH(init.io, path_env, argument) catch null;
+
+                    if (path) |p| {
+                        try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, p, argument });
+                    } else {
                         try stdout.interface.print("{s}: not found\n", .{argument});
                     }
+
                     continue;
                 };
                 // If string to enum passes, means it is a builtin command

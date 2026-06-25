@@ -7,6 +7,11 @@ const BuiltinCommand = enum {
     type,
 };
 
+fn fileExists(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
+    dir.access(io, name, .{}) catch return false;
+    return true;
+}
+
 fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
     dir.access(io, name, .{ .execute = true }) catch return false;
     return true;
@@ -62,13 +67,16 @@ pub fn main(init: std.process.Init) !void {
                     const found: bool = iterate_dirs: while (dirs.next()) |path| {
                         var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
                         defer dir.close(init.io);
-                        var dir_iterate = dir.iterate();
-
-                        while (try dir_iterate.next(init.io)) |entry| {
-                            if (entry.kind == .file and std.mem.eql(u8, argument, entry.name) and canExecute(dir, init.io, entry.name)) {
-                                try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
-                                break :iterate_dirs true;
-                            }
+                        // var dir_iterate = dir.iterate();
+                        //
+                        // while (try dir_iterate.next(init.io)) |entry| {
+                        //     if (entry.kind == .file and std.mem.eql(u8, argument, entry.name) and canExecute(dir, init.io, entry.name)) {
+                        //         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
+                        //         break :iterate_dirs true;
+                        //     }
+                        // }
+                        if (fileExists(dir, init.io, argument) and canExecute(dir, init.io, argument)) {
+                            break :iterate_dirs true;
                         }
                     } else false;
 

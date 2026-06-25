@@ -6,6 +6,7 @@ const BuiltInCommand = enum {
     echo,
     type,
     pwd,
+    cd,
 };
 
 const MyErrors = error{
@@ -18,7 +19,8 @@ pub fn main(init: std.process.Init) !void {
     var stdin_buffer: [4096]u8 = undefined;
     var stdin = std.Io.File.stdin().readerStreaming(io, &stdin_buffer);
 
-    var stdout = std.Io.File.stdout().writer(io, &.{});
+    var stdout_writer = std.Io.File.stdout().writer(io, &.{});
+    const stdout = &stdout_writer.interface;
 
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
@@ -27,7 +29,7 @@ pub fn main(init: std.process.Init) !void {
     const path_env = try init.minimal.environ.getAlloc(arena, "PATH");
 
     while (true) {
-        try stdout.interface.print("$ ", .{});
+        try stdout.print("$ ", .{});
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
 
         var iter = std.mem.splitScalar(u8, input.?, ' ');
@@ -56,9 +58,9 @@ pub fn main(init: std.process.Init) !void {
                     continue;
                 };
 
-                try stdout.interface.print("{s}", .{result.stdout});
+                try stdout.print("{s}", .{result.stdout});
             } else {
-                try stdout.interface.print("{s}: command not found\n", .{input.?});
+                try stdout.print("{s}: command not found\n", .{input.?});
             }
             continue;
         };
@@ -68,7 +70,7 @@ pub fn main(init: std.process.Init) !void {
                 return;
             },
             .echo => {
-                try stdout.interface.print("{s}\n", .{iter.rest()});
+                try stdout.print("{s}\n", .{iter.rest()});
             },
             .type => {
                 const argument: []const u8 = iter.rest();
@@ -77,23 +79,29 @@ pub fn main(init: std.process.Init) !void {
                     const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
 
                     if (path) |p| {
-                        try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, p, argument });
+                        try stdout.print("{s} is {s}/{s}\n", .{ argument, p, argument });
                     } else {
-                        try stdout.interface.print("{s}: not found\n", .{argument});
+                        try stdout.print("{s}: not found\n", .{argument});
                     }
 
                     continue;
                 };
                 // If string to enum passes, means it is a builtin command
-                try stdout.interface.print("{s} is a shell builtin\n", .{argument});
+                try stdout.print("{s} is a shell builtin\n", .{argument});
             },
             .pwd => {
                 var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
                 const len = getCurrentWorkingDir(io, &buffer);
                 if (len) |length| {
-                    try stdout.interface.print("{s}\n", .{buffer[0..length]});
+                    try stdout.print("{s}\n", .{buffer[0..length]});
                 }
             },
+            .cd => {
+                const requested_path: []const u8 = iter.rest();
+                if (!changeDirectory(io, requested_path)) {
+                    try stdout.print("cd: {s}: No such file or directory\n", .{requested_path});
+                }
+            }
         }
     }
 }
@@ -101,6 +109,16 @@ pub fn main(init: std.process.Init) !void {
 fn getCurrentWorkingDir(io: anytype, buffer: *[std.Io.Dir.max_path_bytes]u8) ?usize {
     const len = std.Io.Dir.cwd().realPathFile(io, ".", buffer) catch return null;
     return len;
+}
+
+fn changeDirectory(io: anytype, name: []const u8) bool {
+    if (!std.fs.path.isAbsolute(name)) {
+        return false;
+    }
+    var dir = std.Io.Dir.openDirAbsolute(io, name, .{}) catch return false;
+    std.process.setCurrentDir(io, dir) catch return false;
+    defer dir.close(io);
+    return true;
 }
 
 fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {

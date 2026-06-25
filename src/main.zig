@@ -5,6 +5,7 @@ const BuiltInCommand = enum {
     exit,
     echo,
     type,
+    pwd,
 };
 
 const MyErrors = error{
@@ -86,8 +87,20 @@ pub fn main(init: std.process.Init) !void {
                 // If string to enum passes, means it is a builtin command
                 try stdout.interface.print("{s} is a shell builtin\n", .{argument});
             },
+            .pwd => {
+                var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+                const len = getCurrentWorkingDir(io, &buffer);
+                if (len) |length| {
+                    try stdout.interface.print("{s}\n", .{buffer[0..length]});
+                }
+            },
         }
     }
+}
+
+fn getCurrentWorkingDir(io: anytype, buffer: *[std.Io.Dir.max_path_bytes]u8) ?usize {
+    const len = std.Io.Dir.cwd().realPathFile(io, ".", buffer) catch return null;
+    return len;
 }
 
 fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const BuiltinCommand = enum {
     exit,
@@ -6,8 +7,8 @@ const BuiltinCommand = enum {
     type,
 };
 
-fn canExecute(path: []const u8, io: std.Io) bool {
-    std.Io.Dir.cwd().access(io, path, .{ .execute = true }) catch return false;
+fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
+    dir.access(io, name, .{ .execute = true }) catch return false;
     return true;
 }
 
@@ -56,16 +57,16 @@ pub fn main(init: std.process.Init) !void {
                 _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
                     var found_file: bool = false;
                     // Linux uses ':', Windows use ';'
-                    var dirs = std.mem.splitScalar(u8, path_env, ':');
+                    const path_sep = if (builtin.os.tag == .windows) ';' else ':';
+                    var dirs = std.mem.splitScalar(u8, path_env, path_sep);
                     while (dirs.next()) |path| {
-                        //std.debug.print("{s}\n", .{path});
                         var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
                         defer dir.close(init.io);
                         var dir_iterate = dir.iterate();
 
                         while (try dir_iterate.next(init.io)) |entry| {
                             // Add execution check
-                            if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name)) and canExecute(entry.name, init.io)) {
+                            if (entry.kind == .file and std.mem.eql(u8, argument, entry.name) and canExecute(dir, init.io, entry.name)) {
                                 try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
                                 found_file = true;
                                 break;
@@ -76,7 +77,7 @@ pub fn main(init: std.process.Init) !void {
                         }
                     }
 
-                    if (found_file == false) {
+                    if (!found_file) {
                         try stdout.interface.print("{s}: not found\n", .{argument});
                     }
                     continue;

@@ -44,6 +44,8 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
+        const argument: []const u8 = iter.rest();
+
         switch (command_enum) {
             .exit => {
                 return;
@@ -52,32 +54,25 @@ pub fn main(init: std.process.Init) !void {
                 try stdout.interface.print("{s}\n", .{iter.rest()});
             },
             .type => {
-                const argument: []const u8 = iter.rest();
                 //TODO: use a cleaner API for this
                 _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
-                    var found_file: bool = false;
-                    // Linux uses ':', Windows use ';'
                     const path_sep = if (builtin.os.tag == .windows) ';' else ':';
                     var dirs = std.mem.splitScalar(u8, path_env, path_sep);
-                    while (dirs.next()) |path| {
+                    
+                    const found: bool = iterate_dirs: while (dirs.next()) |path| {
                         var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
                         defer dir.close(init.io);
                         var dir_iterate = dir.iterate();
 
                         while (try dir_iterate.next(init.io)) |entry| {
-                            // Add execution check
                             if (entry.kind == .file and std.mem.eql(u8, argument, entry.name) and canExecute(dir, init.io, entry.name)) {
                                 try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
-                                found_file = true;
-                                break;
+                                break :iterate_dirs true;
                             }
                         }
-                        if (found_file) {
-                            break;
-                        }
-                    }
+                    } else false;
 
-                    if (!found_file) {
+                    if (!found) {
                         try stdout.interface.print("{s}: not found\n", .{argument});
                     }
                     continue;

@@ -7,11 +7,6 @@ const BuiltinCommand = enum {
     type,
 };
 
-fn fileExists(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
-    dir.access(io, name, .{}) catch return false;
-    return true;
-}
-
 fn canExecute(dir: std.Io.Dir, io: anytype, name: []const u8) bool {
     dir.access(io, name, .{ .execute = true }) catch return false;
     return true;
@@ -28,7 +23,7 @@ fn findExecutableFromPATH(io: std.Io, path_env: []const u8, find: []const u8) My
     while (dirs.next()) |path| {
         var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch continue;
         defer dir.close(io);
-        if (fileExists(dir, io, find) and canExecute(dir, io, find)) {
+        if (canExecute(dir, io, find)) {
             return path;
         }
     }
@@ -36,10 +31,12 @@ fn findExecutableFromPATH(io: std.Io, path_env: []const u8, find: []const u8) My
 }
 
 pub fn main(init: std.process.Init) !void {
-    var stdin_buffer: [4096]u8 = undefined;
-    var stdin = std.Io.File.stdin().readerStreaming(init.io, &stdin_buffer);
+    const io = init.io;
 
-    var stdout = std.Io.File.stdout().writer(init.io, &.{});
+    var stdin_buffer: [4096]u8 = undefined;
+    var stdin = std.Io.File.stdin().readerStreaming(io, &stdin_buffer);
+
+    var stdout = std.Io.File.stdout().writer(io, &.{});
 
     var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena_allocator.deinit();
@@ -49,16 +46,13 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         try stdout.interface.print("$ ", .{});
-        const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse {
-            // This needs to continue if input is NULL (seel below todo) ?
-            continue;
-        };
-        //TODO: need to skip if no input (i.e an enter)
+        const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
 
         var iter = std.mem.splitScalar(u8, input.?, ' ');
 
         // Get command (first word)
         const command: []const u8 = iter.first();
+        if (command.len == 0) continue;
 
         // Check if command is an in-build command
         const command_enum = std.meta.stringToEnum(BuiltinCommand, command) orelse {
@@ -79,23 +73,7 @@ pub fn main(init: std.process.Init) !void {
             .type => {
                 //TODO: use a cleaner API for this
                 _ = std.meta.stringToEnum(BuiltinCommand, argument) orelse {
-                    // const path_sep = if (builtin.os.tag == .windows) ';' else ':';
-                    // var dirs = std.mem.splitScalar(u8, path_env, path_sep);
-                    //
-                    // const found: bool = iterate_dirs: while (dirs.next()) |path| {
-                    //     var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
-                    //     defer dir.close(init.io);
-                    //     if (fileExists(dir, init.io, argument) and canExecute(dir, init.io, argument)) {
-                    //         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, argument });
-                    //         break :iterate_dirs true;
-                    //     }
-                    // } else false;
-                    //
-                    // if (!found) {
-                    //     try stdout.interface.print("{s}: not found\n", .{argument});
-                    // }
-
-                    const path = findExecutableFromPATH(init.io, path_env, argument) catch null;
+                    const path = findExecutableFromPATH(io, path_env, argument) catch null;
 
                     if (path) |p| {
                         try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, p, argument });

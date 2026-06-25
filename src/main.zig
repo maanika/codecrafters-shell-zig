@@ -40,13 +40,14 @@ pub fn main(init: std.process.Init) !void {
             // determine if commnand is an executable
             // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
-            if (path) |p| {
+            if (path) | _ | {
                 // find argv dynamically and allocate space
                 var buffer = try std.ArrayList([]const u8).initCapacity(arena, 5);
                 defer buffer.deinit(arena);
 
                 // Add the program path as the first argument
-                try buffer.append(arena, try std.mem.join(arena, "/", &.{p, command}));
+                //try buffer.append(arena, try std.mem.join(arena, "/", &.{p, command}));
+                try buffer.append(arena, command);
 
                 while (iter.next()) | value | {
                     try buffer.append(arena, value);

@@ -27,6 +27,7 @@ pub fn main(init: std.process.Init) !void {
     const arena = arena_allocator.allocator();
 
     const path_env = try init.minimal.environ.getAlloc(arena, "PATH");
+    const home_path = try init.minimal.environ.getAlloc(arena, "HOME");
 
     while (true) {
         try stdout.print("$ ", .{});
@@ -97,7 +98,10 @@ pub fn main(init: std.process.Init) !void {
                 }
             },
             .cd => {
-                const requested_path: []const u8 = iter.rest();
+                var requested_path: []const u8 = iter.rest();
+                if (requested_path.len == 1 and std.mem.eql(u8, "~", requested_path)) {
+                    requested_path = home_path;
+                }
                 if (!changeDirectory(io, requested_path)) {
                     try stdout.print("cd: {s}: No such file or directory\n", .{requested_path});
                 }

@@ -40,28 +40,27 @@ pub fn main(init: std.process.Init) !void {
             // determine if commnand is an executable
             // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
-            if (path) | _ | {
-                // find argv dynamically and allocate space
+            if (path) |_| {
+                // TODO: only allowing 5 args for now?
                 var buffer = try std.ArrayList([]const u8).initCapacity(arena, 5);
                 defer buffer.deinit(arena);
 
                 // Add the program path as the first argument
-                //try buffer.append(arena, try std.mem.join(arena, "/", &.{p, command}));
                 try buffer.append(arena, command);
 
-                while (iter.next()) | value | {
+                while (iter.next()) |value| {
                     try buffer.append(arena, value);
                 }
-                const result = std.process.run(arena, io, .{ .argv = buffer.items }) catch { continue; };
+                const result = std.process.run(arena, io, .{ .argv = buffer.items }) catch {
+                    continue;
+                };
 
                 try stdout.interface.print("{s}", .{result.stdout});
-
             } else {
                 try stdout.interface.print("{s}: command not found\n", .{input.?});
             }
             continue;
         };
-
 
         switch (command_enum) {
             .exit => {
@@ -109,4 +108,3 @@ fn findExecutableFromPATH(io: std.Io, path_env: []const u8, find: []const u8) My
     }
     return MyErrors.NotFound;
 }
-

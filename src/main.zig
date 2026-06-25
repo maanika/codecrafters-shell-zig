@@ -7,10 +7,9 @@ const BuiltinCommand = enum {
 };
 
 fn canExecute(path: []const u8, io: std.Io) bool {
-    std.Io.Dir.cwd().access(io, path, .{.execute = true }) catch return false;
+    std.Io.Dir.cwd().access(io, path, .{ .execute = true }) catch return false;
     return true;
 }
-
 
 pub fn main(init: std.process.Init) !void {
     var stdin_buffer: [4096]u8 = undefined;
@@ -58,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
                     var found_file: bool = false;
                     // Linux uses ':', Windows use ';'
                     var dirs = std.mem.splitScalar(u8, path_env, ':');
-                    while (dirs.next())  |path| {
+                    while (dirs.next()) |path| {
                         //std.debug.print("{s}\n", .{path});
                         var dir = try std.Io.Dir.cwd().openDir(init.io, path, .{ .iterate = true });
                         defer dir.close(init.io);
@@ -67,14 +66,6 @@ pub fn main(init: std.process.Init) !void {
                         while (try dir_iterate.next(init.io)) |entry| {
                             // Add execution check
                             if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name)) and canExecute(path, init.io)) {
-                                // var file = try std.Io.Dir.cwd().openFile(init.io, path, .{.mode = .read_only});
-                                // defer file.close(init.io);
-                                // const file_stat = try file.stat(init.io);
-                                // const permissions = file_stat.permissions & 0o0001;
-                                // if (permissions != 0o0001) {
-                                //     continue;
-                                // }
-
                                 try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
                                 found_file = true;
                                 break;

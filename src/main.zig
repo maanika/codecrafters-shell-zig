@@ -65,7 +65,7 @@ pub fn main(init: std.process.Init) !void {
 
                         while (try dir_iterate.next(init.io)) |entry| {
                             // Add execution check
-                            if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name)) and canExecute(path, init.io)) {
+                            if ((entry.kind == .file) and (std.mem.eql(u8, argument, entry.name)) and canExecute(entry.name, init.io)) {
                                 try stdout.interface.print("{s} is {s}/{s}\n", .{ argument, path, entry.name });
                                 found_file = true;
                                 break;

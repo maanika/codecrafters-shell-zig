@@ -51,7 +51,6 @@ pub fn main(init: std.process.Init) !void {
                 const result = std.process.run(arena, io, .{ .argv = args }) catch {
                     continue;
                 };
-
                 try stdout.print("{s}", .{result.stdout});
             } else {
                 try stdout.print("{s}: command not found\n", .{input.?});
@@ -97,8 +96,9 @@ pub fn main(init: std.process.Init) !void {
                 }
             },
             .cd => {
+                if (args.len < 2) continue;
                 var requested_path: []const u8 = args[1];
-                if (requested_path.len == 1 and std.mem.eql(u8, "~", requested_path)) {
+                if (std.mem.eql(u8, "~", requested_path)) {
                     requested_path = home_path;
                 }
                 if (!changeDirectory(io, requested_path)) {

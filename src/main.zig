@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const command_parser = @import("command.zig");
+
 const BuiltInCommand = enum {
     exit,
     echo,
@@ -31,28 +33,14 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         try stdout.print("$ ", .{});
+
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
+        if (input.?.len == 0) continue;
 
-        var iter = std.mem.splitScalar(u8, input.?, ' ');
+        const args = try command_parser.parseCommandLine(arena, input.?);
+        if (args.len == 0) continue;
 
-        // Get command (first word)
-        const command: []const u8 = iter.first();
-        if (command.len == 0) continue;
-
-        // Single Quotes
-        // TODO: only allowing 5 args for now? expand logic
-        var buffer = try std.ArrayList([]const u8).initCapacity(arena, 5);
-        defer buffer.deinit(arena);
-
-        // Add the program path as the first argument
-        try buffer.append(arena, command);
-
-        const rest: []const u8 = iter.rest();
-        var iter2 = std.mem.tokenizeAny(u8, rest, " '");
-        // TODO: can I replace this with iter2.rest and appendSlice?
-        while (iter2.next()) |value| {
-            try buffer.append(arena, value);
-        }
+        const command = args[0];
 
         // Check if command is an builtin command
         const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
@@ -60,7 +48,7 @@ pub fn main(init: std.process.Init) !void {
             // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
             if (path) |_| {
-                const result = std.process.run(arena, io, .{ .argv = buffer.items }) catch {
+                const result = std.process.run(arena, io, .{ .argv = args }) catch {
                     continue;
                 };
 
@@ -71,26 +59,21 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
         
-
-        // remove command
-        _ = buffer.orderedRemove(0);
-
         switch (command_enum) {
             .exit => {
                 return;
             },
             .echo => {
-                const items = buffer.items.len;
-                for (0..items) |i| {
-                    try stdout.print("{s}", .{buffer.orderedRemove(0)});
-                    if (i < items - 1) {
+                for (1..args.len) |index| {
+                    try stdout.print("{s}", .{args[index]});
+                    if (index < args.len - 1) {
                         try stdout.print(" ", .{});
                     }
                 }
                 try stdout.print("\n", .{});
             },
             .type => {
-                const argument: []const u8 = buffer.pop() orelse continue;
+                const argument: []const u8 = args[1];
                 //TODO: use a cleaner API for this
                 _ = std.meta.stringToEnum(BuiltInCommand, argument) orelse {
                     const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
@@ -114,7 +97,7 @@ pub fn main(init: std.process.Init) !void {
                 }
             },
             .cd => {
-                var requested_path: []const u8 = buffer.pop() orelse continue;
+                var requested_path: []const u8 = args[1];
                 if (requested_path.len == 1 and std.mem.eql(u8, "~", requested_path)) {
                     requested_path = home_path;
                 }

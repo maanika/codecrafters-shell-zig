@@ -39,22 +39,27 @@ pub fn main(init: std.process.Init) !void {
         const command: []const u8 = iter.first();
         if (command.len == 0) continue;
 
+        // Single Quotes
+        // TODO: only allowing 5 args for now? expand logic
+        var buffer = try std.ArrayList([]const u8).initCapacity(arena, 5);
+        defer buffer.deinit(arena);
+
+        // Add the program path as the first argument
+        try buffer.append(arena, command);
+
+        const rest: []const u8 = iter.rest();
+        var iter2 = std.mem.tokenizeAny(u8, rest, " '");
+        // TODO: can I replace this with iter2.rest and appendSlice?
+        while (iter2.next()) |value| {
+            try buffer.append(arena, value);
+        }
+
         // Check if command is an builtin command
         const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
             // determine if commnand is an executable
             // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
             if (path) |_| {
-                // TODO: only allowing 5 args for now?
-                var buffer = try std.ArrayList([]const u8).initCapacity(arena, 5);
-                defer buffer.deinit(arena);
-
-                // Add the program path as the first argument
-                try buffer.append(arena, command);
-
-                while (iter.next()) |value| {
-                    try buffer.append(arena, value);
-                }
                 const result = std.process.run(arena, io, .{ .argv = buffer.items }) catch {
                     continue;
                 };
@@ -65,16 +70,27 @@ pub fn main(init: std.process.Init) !void {
             }
             continue;
         };
+        
+
+        // remove command
+        _ = buffer.orderedRemove(0);
 
         switch (command_enum) {
             .exit => {
                 return;
             },
             .echo => {
-                try stdout.print("{s}\n", .{iter.rest()});
+                const items = buffer.items.len;
+                for (0..items) |i| {
+                    try stdout.print("{s}", .{buffer.orderedRemove(0)});
+                    if (i < items - 1) {
+                        try stdout.print(" ", .{});
+                    }
+                }
+                try stdout.print("\n", .{});
             },
             .type => {
-                const argument: []const u8 = iter.rest();
+                const argument: []const u8 = buffer.pop() orelse continue;
                 //TODO: use a cleaner API for this
                 _ = std.meta.stringToEnum(BuiltInCommand, argument) orelse {
                     const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
@@ -91,21 +107,21 @@ pub fn main(init: std.process.Init) !void {
                 try stdout.print("{s} is a shell builtin\n", .{argument});
             },
             .pwd => {
-                var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-                const len = getCurrentWorkingDir(io, &buffer);
+                var buffer2: [std.Io.Dir.max_path_bytes]u8 = undefined;
+                const len = getCurrentWorkingDir(io, &buffer2);
                 if (len) |length| {
-                    try stdout.print("{s}\n", .{buffer[0..length]});
+                    try stdout.print("{s}\n", .{buffer2[0..length]});
                 }
             },
             .cd => {
-                var requested_path: []const u8 = iter.rest();
+                var requested_path: []const u8 = buffer.pop() orelse continue;
                 if (requested_path.len == 1 and std.mem.eql(u8, "~", requested_path)) {
                     requested_path = home_path;
                 }
                 if (!changeDirectory(io, requested_path)) {
                     try stdout.print("cd: {s}: No such file or directory\n", .{requested_path});
                 }
-            }
+            },
         }
     }
 }
@@ -117,7 +133,7 @@ fn getCurrentWorkingDir(io: anytype, buffer: *[std.Io.Dir.max_path_bytes]u8) ?us
 
 fn changeDirectory(io: anytype, name: []const u8) bool {
     var dir: ?std.Io.Dir = null;
-    // TODO: clean this up (not use optional 
+    // TODO: clean this up (not use optional
     if (std.fs.path.isAbsolute(name)) {
         dir = std.Io.Dir.openDirAbsolute(io, name, .{}) catch return false;
     } else {

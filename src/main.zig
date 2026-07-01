@@ -44,7 +44,12 @@ pub fn main(init: std.process.Init) !void {
         if (input.?.len == 0) continue;
 
         const args = try command_parser.parseCommandLine(allocator, input.?);
-        defer allocator.free(args);
+        defer {
+            for (args) |arg| {
+                allocator.free(arg);
+            }
+            allocator.free(args);
+        }
 
         if (args.len == 0) continue;
 

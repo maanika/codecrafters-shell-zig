@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const assert = std.debug.assert;
 
 const command_parser = @import("command.zig");
 
@@ -24,12 +25,17 @@ pub fn main(init: std.process.Init) !void {
     var stdout_writer = std.Io.File.stdout().writer(io, &.{});
     const stdout = &stdout_writer.interface;
 
-    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena_allocator.deinit();
-    const arena = arena_allocator.allocator();
+    // TODO: replace with ArenaAllocator, using DebugAllocator for leak detection for now.
+    //var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    var arena_allocator: std.heap.DebugAllocator(.{}) = .init;
+    defer assert(arena_allocator.deinit() == .ok);
+    const allocator = arena_allocator.allocator();
 
-    const path_env = try init.minimal.environ.getAlloc(arena, "PATH");
-    const home_path = try init.minimal.environ.getAlloc(arena, "HOME");
+    const path_env = try init.minimal.environ.getAlloc(allocator, "PATH");
+    defer allocator.free(path_env);
+
+    const home_path = try init.minimal.environ.getAlloc(allocator, "HOME");
+    defer allocator.free(home_path);
 
     while (true) {
         try stdout.print("$ ", .{});
@@ -37,7 +43,9 @@ pub fn main(init: std.process.Init) !void {
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
         if (input.?.len == 0) continue;
 
-        const args = try command_parser.parseCommandLine(arena, input.?);
+        const args = try command_parser.parseCommandLine(allocator, input.?);
+        defer allocator.free(args);
+
         if (args.len == 0) continue;
 
         const command = args[0];
@@ -48,7 +56,7 @@ pub fn main(init: std.process.Init) !void {
             // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
             if (path) |_| {
-                const result = std.process.run(arena, io, .{ .argv = args }) catch {
+                const result = std.process.run(allocator, io, .{ .argv = args }) catch {
                     continue;
                 };
                 try stdout.print("{s}", .{result.stdout});

@@ -6,7 +6,6 @@ const State = enum {
     InSingleQuote,
     InDoubleQuote,
     InBackslashEscapeNormal,
-    InBackslashEscapeSingleQuote,
     InBackslashEscapeDoubleQuote,
 };
 
@@ -39,8 +38,6 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
             .InSingleQuote => {
                 if (char == '\'') {
                     state = .Normal;
-                } else if (char == '\\') {
-                    state = .InBackslashEscapeSingleQuote;
                 } else {
                     try curr_arg.append(allocator, char);
                 }
@@ -58,10 +55,6 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
             .InBackslashEscapeNormal => {
                 try curr_arg.append(allocator, char);
                 state = .Normal;
-            },
-            .InBackslashEscapeSingleQuote => {
-                try curr_arg.append(allocator, char);
-                state = .InSingleQuote;
             },
             .InBackslashEscapeDoubleQuote => {
                 try curr_arg.append(allocator, char);

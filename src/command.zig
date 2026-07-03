@@ -5,6 +5,7 @@ const State = enum {
     Normal,
     InSingleQuote,
     InDoubleQuote,
+    InBackslashEscape,
 };
 
 // Parses the command line input and returns the command and arguments
@@ -27,6 +28,8 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                     state = .InSingleQuote;
                 } else if (char == '\"') {
                     state = .InDoubleQuote;
+                } else if (char == '\\') {
+                    state = .InBackslashEscape;
                 } else {
                     try curr_arg.append(allocator, char);
                 }
@@ -44,6 +47,10 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                 } else {
                     try curr_arg.append(allocator, char);
                 }
+            },
+            .InBackslashEscape => {
+                try curr_arg.append(allocator, char);
+                state = .Normal;
             },
         }
     }

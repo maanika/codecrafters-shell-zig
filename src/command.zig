@@ -5,7 +5,9 @@ const State = enum {
     Normal,
     InSingleQuote,
     InDoubleQuote,
-    InBackslashEscape,
+    InBackslashEscapeNormal,
+    InBackslashEscapeSingleQuote,
+    InBackslashEscapeDoubleQuote,
 };
 
 // Parses the command line input and returns the command and arguments
@@ -29,7 +31,7 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                 } else if (char == '\"') {
                     state = .InDoubleQuote;
                 } else if (char == '\\') {
-                    state = .InBackslashEscape;
+                    state = .InBackslashEscapeNormal;
                 } else {
                     try curr_arg.append(allocator, char);
                 }
@@ -37,6 +39,8 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
             .InSingleQuote => {
                 if (char == '\'') {
                     state = .Normal;
+                } else if (char == '\\') {
+                    state = .InBackslashEscapeSingleQuote;
                 } else {
                     try curr_arg.append(allocator, char);
                 }
@@ -45,15 +49,24 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                 if (char == '\"') {
                     state = .Normal;
                 } else if (char == '\\') {
-                    state = .InBackslashEscape;
+                    state = .InBackslashEscapeDoubleQuote;
                 } else {
                     try curr_arg.append(allocator, char);
                 }
             },
-            .InBackslashEscape => {
+            // TODO: Can cleanthis up because it is repetitive?
+            .InBackslashEscapeNormal => {
                 try curr_arg.append(allocator, char);
                 state = .Normal;
             },
+            .InBackslashEscapeSingleQuote => {
+                try curr_arg.append(allocator, char);
+                state = .InSingleQuote;
+            },
+            .InBackslashEscapeDoubleQuote => {
+                try curr_arg.append(allocator, char);
+                state = .InDoubleQuote;
+            }
         }
     }
 

@@ -44,6 +44,8 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
             .InDoubleQuote => {
                 if (char == '\"') {
                     state = .Normal;
+                } else if (char == '\\') {
+                    state = .InBackslashEscape;
                 } else {
                     try curr_arg.append(allocator, char);
                 }

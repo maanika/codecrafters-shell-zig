@@ -25,52 +25,70 @@ pub fn main(init: std.process.Init) !void {
     var stdout_writer = std.Io.File.stdout().writer(io, &.{});
     const stdout = &stdout_writer.interface;
 
-    // TODO: replace with ArenaAllocator, using DebugAllocator for leak detection for now.
-    //var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    var arena_allocator: std.heap.DebugAllocator(.{}) = .init;
-    defer assert(arena_allocator.deinit() == .ok);
-    const allocator = arena_allocator.allocator();
+    //TODO: can I use a faster allocator in release mode?
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    defer assert(debug_allocator.deinit() == .ok);
+    const gpa = debug_allocator.allocator();
 
-    const path_env = try init.minimal.environ.getAlloc(allocator, "PATH");
-    defer allocator.free(path_env);
+    const path_env = try init.minimal.environ.getAlloc(gpa, "PATH");
+    defer gpa.free(path_env);
 
-    const home_path = try init.minimal.environ.getAlloc(allocator, "HOME");
-    defer allocator.free(home_path);
+    const home_path = try init.minimal.environ.getAlloc(gpa, "HOME");
+    defer gpa.free(home_path);
 
     while (true) {
+        // Use arena allocator within loop, no need to call free,
+        // cleans itself with defer after every iteration/command.
+        // TODO: Use page allocator in release mode.
+        var arena_allocator: std.heap.ArenaAllocator = .init(gpa);
+        defer arena_allocator.deinit();
+        const arena = arena_allocator.allocator();
+
         try stdout.print("$ ", .{});
 
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
         if (input.?.len == 0) continue;
 
-        const args = try command_parser.parseCommandLine(allocator, input.?);
-        defer {
-            for (args) |arg| {
-                allocator.free(arg);
-            }
-            allocator.free(args);
-        }
-
+        const args: [][]const u8 = try command_parser.parseCommandLine(arena, input.?);
         if (args.len == 0) continue;
 
         const command = args[0];
 
+        // check for redirection
+        // Redirections needs to be GLOBAL work for all commands
+        // TODO: Need to think of abrstrating printing and redirecting 
+        var redirect: bool = false;
+        var redirect_index: usize = args.len;
+        for (args, 0..args.len) |arg, index| {
+            if ((std.mem.eql(u8, arg, ">")) or std.mem.eql(u8, arg, "1>")) {
+                redirect_index = if (index + 1 < args.len) index else break;
+                redirect = true;
+            }
+        }
+
         // Check if command is an builtin command
         const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
-            // determine if commnand is an executable
-            // if yes -> execute the program (passing arguments from the command line)
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
+            // Thinking ...
+            // TODO: we cannot pass the full args here, because it may have a redirect
+            // we need to pass upto a redirect and then execute the redirect
+            // should we change the command args return to include a redirect flag?
+            // can we split the args into two before and after redirect (0> or >) ?
             if (path) |_| {
-                const result = std.process.run(allocator, io, .{ .argv = args }) catch {
+                const result = std.process.run(arena, io, .{ .argv = args[0..redirect_index]}) catch {
                     continue;
                 };
+                // if we have a stdout and it is a redirect we sent it to a file
+                // create file if not existsing , else overwrite existing file
                 try stdout.print("{s}", .{result.stdout});
+                // > or 1> only redirects stdout so we can still print stderr
+                try stdout.print("{s}", .{result.stderr});
             } else {
                 try stdout.print("{s}: command not found\n", .{input.?});
             }
             continue;
         };
-        
+
         switch (command_enum) {
             .exit => {
                 return;
@@ -129,7 +147,7 @@ fn getCurrentWorkingDir(io: anytype, buffer: *[std.Io.Dir.max_path_bytes]u8) ?us
 
 fn changeDirectory(io: anytype, name: []const u8) bool {
     var dir: ?std.Io.Dir = null;
-    // TODO: clean this up (not use optional
+    // TODO: clean this up (not use optional)
     if (std.fs.path.isAbsolute(name)) {
         dir = std.Io.Dir.openDirAbsolute(io, name, .{}) catch return false;
     } else {

@@ -13,9 +13,11 @@ const State = enum {
 pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
     var state: State = .Normal;
 
+    //TODO: 100?
     var curr_arg = try std.ArrayList(u8).initCapacity(allocator, 100);
     defer curr_arg.deinit(allocator);
 
+    //TODO: 5?
     var args = try std.ArrayList([]const u8).initCapacity(allocator, 5);
     defer args.deinit(allocator);
 
@@ -23,6 +25,7 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
         switch (state) {
             .Normal => {
                 if (char == ' ') {
+                    // space acts as delimiters (unless quoted or escaped)
                     const arg = try curr_arg.toOwnedSlice(allocator);
                     if (arg.len > 0) try args.append(allocator, arg);
                 } else if (char == '\'') {
@@ -39,6 +42,7 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                 if (char == '\'') {
                     state = .Normal;
                 } else {
+                    // Preserves literal values of all characters
                     try curr_arg.append(allocator, char);
                 }
             },
@@ -48,15 +52,17 @@ pub fn parseCommandLine(allocator: Allocator, input: []const u8) ![][]const u8 {
                 } else if (char == '\\') {
                     state = .InBackslashEscapeDoubleQuote;
                 } else {
+                    // preserve most characters (special characters checked above)
                     try curr_arg.append(allocator, char);
                 }
             },
-            // TODO: Can cleanthis up because it is repetitive?
             .InBackslashEscapeNormal => {
+                // escape the next character
                 try curr_arg.append(allocator, char);
                 state = .Normal;
             },
             .InBackslashEscapeDoubleQuote => {
+                // TODO: only escape ($, `, ", \, and newline)
                 try curr_arg.append(allocator, char);
                 state = .InDoubleQuote;
             }

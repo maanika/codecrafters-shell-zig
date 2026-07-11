@@ -86,6 +86,7 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
+        if (command_enum == .exit) return;
         handleBuiltinCommand(io, command_enum, args, writer, home_path, path_env, stdout) catch {};
 
         //     switch (command_enum) {

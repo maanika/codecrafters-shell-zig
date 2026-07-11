@@ -86,63 +86,15 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
-        if (command_enum == .exit) return;
+        if (command_enum == .exit) return; // TODO: cleanup
         handleBuiltinCommand(io, command_enum, args, writer, home_path, path_env, stdout) catch {};
-
-        //     switch (command_enum) {
-        //         .exit => {
-        //             return;
-        //         },
-        //         .echo => {
-        //             for (1..args.len) |index| {
-        //                 try writer.print("{s}", .{args[index]});
-        //                 if (index < args.len - 1) {
-        //                     try writer.print(" ", .{});
-        //                 }
-        //             }
-        //             try writer.print("\n", .{});
-        //         },
-        //         .type => {
-        //             const argument: []const u8 = args[1];
-        //             //TODO: use a cleaner API for this
-        //             _ = std.meta.stringToEnum(BuiltInCommand, argument) orelse {
-        //                 const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
-        //
-        //                 if (path) |p| {
-        //                     try writer.print("{s} is {s}/{s}\n", .{ argument, p, argument });
-        //                 } else {
-        //                     try stdout.print("{s}: not found\n", .{argument});
-        //                 }
-        //
-        //                 continue;
-        //             };
-        //             // If string to enum passes, means it is a builtin command
-        //             try writer.print("{s} is a shell builtin\n", .{argument});
-        //         },
-        //         .pwd => {
-        //             var buffer2: [Dir.max_path_bytes]u8 = undefined;
-        //             const len = getCurrentWorkingDir(io, &buffer2);
-        //             if (len) |length| {
-        //                 try writer.print("{s}\n", .{buffer2[0..length]});
-        //             }
-        //         },
-        //         .cd => {
-        //             if (args.len < 2) continue;
-        //             var requested_path: []const u8 = args[1];
-        //             if (std.mem.eql(u8, "~", requested_path)) {
-        //                 requested_path = home_path;
-        //             }
-        //             if (!changeDirectory(io, requested_path)) {
-        //                 try stdout.print("cd: {s}: No such file or directory\n", .{requested_path});
-        //             }
-        //         },
-        //     }
     }
 }
 
 fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8, writer: *std.Io.Writer, home_path: []const u8, path_env: []const u8, stdout: *std.Io.Writer) !void {
     switch (command) {
         .exit => {
+            // TODO: return an error that will catch and return from main
             return;
         },
         .echo => {

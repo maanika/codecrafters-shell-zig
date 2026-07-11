@@ -16,6 +16,12 @@ const MyErrors = error{
     NotFound,
 };
 
+const Redirect = enum {
+    RedirectNone,
+    RedirectStdout,
+    RedirectStderr,
+};
+
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
@@ -53,21 +59,45 @@ pub fn main(init: std.process.Init) !void {
         if (parsed_input.len == 0) continue;
 
         var args: [][]const u8 = parsed_input;
-        var redirect_file: ?[]const u8 = null;
+
+        var redirect: Redirect = .RedirectNone;
+        var redirect_index: ?usize = null;
         for (parsed_input, 0..parsed_input.len) |arg, index| {
             if ((std.mem.eql(u8, arg, ">")) or std.mem.eql(u8, arg, "1>")) {
-                args = parsed_input[0..index];
-                redirect_file = if (index + 1 < parsed_input.len) parsed_input[index + 1] else continue;
+                redirect = .RedirectStdout;
+                redirect_index = index;
+                break;
+            } else if (std.mem.eql(u8, arg, "2>")) {
+                redirect = .RedirectStderr;
+                redirect_index = index;
                 break;
             }
         }
 
-        var writer: *std.Io.Writer = @constCast(stdout);
+        var redirect_file: ?[]const u8 = null;
+        if (redirect != .RedirectNone) {
+            args = parsed_input[0..redirect_index.?];
+            redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
+        }
+
+        var writer_out: *std.Io.Writer = @constCast(stdout);
+        var writer_err: *std.Io.Writer = @constCast(stdout);
         var output_file: ?File = null;
         if (redirect_file != null) {
             output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
             var output_file_writer = output_file.?.writer(io, &.{});
-            writer = &output_file_writer.interface;
+            writer_out = &output_file_writer.interface;
+            switch (redirect) {
+                .RedirectNone => {
+                    break;
+                },
+                .RedirectStdout => {
+                    writer_out = &output_file_writer.interface;
+                },
+                .RedirectStderr => {
+                    writer_err = &output_file_writer.interface;
+                },
+            }
         }
         defer if (output_file != null) output_file.?.close(io);
 
@@ -78,20 +108,20 @@ pub fn main(init: std.process.Init) !void {
                 const result = std.process.run(arena, io, .{ .argv = args }) catch {
                     continue;
                 };
-                try writer.print("{s}", .{result.stdout});
-                try stdout.print("{s}", .{result.stderr});
+                try writer_out.print("{s}", .{result.stdout});
+                try writer_err.print("{s}", .{result.stderr});
             } else {
-                try stdout.print("{s}: command not found\n", .{input.?});
+                try writer_err.print("{s}: command not found\n", .{input.?});
             }
             continue;
         };
 
         if (command_enum == .exit) return; // TODO: cleanup
-        handleBuiltinCommand(io, command_enum, args, writer, home_path, path_env, stdout) catch {};
+        handleBuiltinCommand(io, command_enum, args, writer_out, home_path, path_env, writer_err) catch {};
     }
 }
 
-fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8, writer: *std.Io.Writer, home_path: []const u8, path_env: []const u8, stdout: *std.Io.Writer) !void {
+fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8, writer_out: *std.Io.Writer, home_path: []const u8, path_env: []const u8, writer_err: *std.Io.Writer) !void {
     switch (command) {
         .exit => {
             // TODO: return an error that will catch and return from main
@@ -99,12 +129,12 @@ fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8,
         },
         .echo => {
             for (1..args.len) |index| {
-                try writer.print("{s}", .{args[index]});
+                try writer_out.print("{s}", .{args[index]});
                 if (index < args.len - 1) {
-                    try writer.print(" ", .{});
+                    try writer_out.print(" ", .{});
                 }
             }
-            try writer.print("\n", .{});
+            try writer_out.print("\n", .{});
         },
         .type => {
             const argument: []const u8 = args[1];
@@ -113,21 +143,21 @@ fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8,
                 const path: ?[]const u8 = findExecutableFromPATH(io, path_env, argument) catch null;
 
                 if (path) |p| {
-                    try writer.print("{s} is {s}/{s}\n", .{ argument, p, argument });
+                    try writer_out.print("{s} is {s}/{s}\n", .{ argument, p, argument });
                 } else {
-                    try stdout.print("{s}: not found\n", .{argument});
+                    try writer_err.print("{s}: not found\n", .{argument});
                 }
 
                 return;
             };
             // If string to enum passes, means it is a builtin command
-            try writer.print("{s} is a shell builtin\n", .{argument});
+            try writer_out.print("{s} is a shell builtin\n", .{argument});
         },
         .pwd => {
             var buffer2: [Dir.max_path_bytes]u8 = undefined;
             const len = getCurrentWorkingDir(io, &buffer2);
             if (len) |length| {
-                try writer.print("{s}\n", .{buffer2[0..length]});
+                try writer_out.print("{s}\n", .{buffer2[0..length]});
             }
         },
         .cd => {
@@ -137,7 +167,7 @@ fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8,
                 requested_path = home_path;
             }
             if (!changeDirectory(io, requested_path)) {
-                try stdout.print("cd: {s}: No such file or directory\n", .{requested_path});
+                try writer_err.print("cd: {s}: No such file or directory\n", .{requested_path});
             }
         },
     }

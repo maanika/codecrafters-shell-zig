@@ -86,7 +86,6 @@ pub fn main(init: std.process.Init) !void {
         if (redirect_file != null) {
             output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
             var output_file_writer = output_file.?.writer(io, &.{});
-            writer_out = &output_file_writer.interface;
             switch (redirect) {
                 .RedirectNone => {
                     break;

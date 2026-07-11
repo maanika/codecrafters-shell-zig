@@ -49,39 +49,49 @@ pub fn main(init: std.process.Init) !void {
         const input: ?[]u8 = try stdin.interface.takeDelimiter('\n') orelse break;
         if (input.?.len == 0) continue;
 
-        const args: [][]const u8 = try command_parser.parseCommandLine(arena, input.?);
-        if (args.len == 0) continue;
+        const parsed_input: [][]const u8 = try command_parser.parseCommandLine(arena, input.?);
+        if (parsed_input.len == 0) continue;
 
-        const command = args[0];
-
-        // check for redirection
+        // Redirection
         // Redirections needs to be GLOBAL work for all commands
-        // TODO: Need to think of abrstrating printing and redirecting 
+        // TODO: Need to think of abrstrating printing and redirecting
+        // Potential Answer 1:
+        // I think I collect what to print and at the end if redirect enabled save to file
+        // else stdout
+        // Potential Answer 2:
+        // Replate try stdout.print with custom function, pass string and args to the function
+        // the function decides to save to a file or print to teminal
+        // TODO: Add file handling, writeFile, createFile, openFile ?
+
+        var args: [][]const u8 = parsed_input;
         var redirect: bool = false;
-        var redirect_index: usize = args.len;
-        for (args, 0..args.len) |arg, index| {
+        var redirect_file: ?[]const u8 = null;
+        for (parsed_input, 0..parsed_input.len) |arg, index| {
             if ((std.mem.eql(u8, arg, ">")) or std.mem.eql(u8, arg, "1>")) {
-                redirect_index = if (index + 1 < args.len) index else break;
+                args = parsed_input[0..index];
+                redirect_file = if (index + 1 < parsed_input.len) parsed_input[index + 1] else continue;
                 redirect = true;
             }
         }
 
+        if (redirect) {
+            var output_file = std.Io.Dir.openFile(std.Io.Dir.cwd(), io, redirect_file.?, .{}) catch null;
+            if (output_file == null) {
+                output_file = std.Io.Dir.createFile(std.Io.Dir.cwd(), io, redirect_file.?, .{}) catch continue;
+            }
+            defer output_file.close(io);
+        }
+
+        const command = args[0];
+
         // Check if command is an builtin command
         const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
             const path: ?[]const u8 = findExecutableFromPATH(io, path_env, command) catch null;
-            // Thinking ...
-            // TODO: we cannot pass the full args here, because it may have a redirect
-            // we need to pass upto a redirect and then execute the redirect
-            // should we change the command args return to include a redirect flag?
-            // can we split the args into two before and after redirect (0> or >) ?
             if (path) |_| {
-                const result = std.process.run(arena, io, .{ .argv = args[0..redirect_index]}) catch {
+                const result = std.process.run(arena, io, .{ .argv = args }) catch {
                     continue;
                 };
-                // if we have a stdout and it is a redirect we sent it to a file
-                // create file if not existsing , else overwrite existing file
                 try stdout.print("{s}", .{result.stdout});
-                // > or 1> only redirects stdout so we can still print stderr
                 try stdout.print("{s}", .{result.stderr});
             } else {
                 try stdout.print("{s}: command not found\n", .{input.?});

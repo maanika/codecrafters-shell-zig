@@ -75,19 +75,15 @@ pub fn main(init: std.process.Init) !void {
         }
 
         var redirect_file: ?[]const u8 = null;
+        var output_file: ?File = null;
+        var output_file_writer: ?std.Io.File.Writer = null;
         if (redirect_type != .RedirectNone) {
             args = parsed_input[0..redirect_index.?];
             redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
-        }
-
-        //var writer_out: *std.Io.Writer = @constCast(stdout);
-        //var writer_err: *std.Io.Writer = @constCast(stdout);
-        var output_file: ?File = null;
-        var output_file_writer: ?std.Io.File.Writer = null;
-        if (redirect_file != null) {
             output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
             output_file_writer = output_file.?.writer(io, &.{});
         }
+        defer if (output_file != null) output_file.?.close(io);
 
         const writer_out = switch (redirect_type) {
             .RedirectNone => &stdout_writer.interface,
@@ -100,8 +96,6 @@ pub fn main(init: std.process.Init) !void {
             .RedirectStdout => &stdout_writer.interface,
             .RedirectStderr => &output_file_writer.?.interface,
         };
-
-        defer if (output_file != null) output_file.?.close(io);
 
         const command = args[0];
         const command_enum = std.meta.stringToEnum(BuiltInCommand, command) orelse {
@@ -119,11 +113,11 @@ pub fn main(init: std.process.Init) !void {
         };
 
         if (command_enum == .exit) return; // TODO: cleanup
-        handleBuiltinCommand(io, command_enum, args, writer_out, home_path, path_env, writer_err) catch {};
+        handleBuiltinCommand(io, command_enum, args, writer_out, writer_err, home_path, path_env) catch {};
     }
 }
 
-fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8, writer_out: *std.Io.Writer, home_path: []const u8, path_env: []const u8, writer_err: *std.Io.Writer) !void {
+fn handleBuiltinCommand(io: std.Io, command: BuiltInCommand, args: [][]const u8, writer_out: *std.Io.Writer, writer_err: *std.Io.Writer, home_path: []const u8, path_env: []const u8) !void {
     switch (command) {
         .exit => {
             // TODO: return an error that will catch and return from main

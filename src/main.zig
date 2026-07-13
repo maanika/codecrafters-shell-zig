@@ -16,7 +16,7 @@ const MyErrors = error{
     NotFound,
 };
 
-const Redirect = enum {
+const RedirectType = enum {
     RedirectNone,
     RedirectStdout,
     RedirectStderr,
@@ -60,44 +60,47 @@ pub fn main(init: std.process.Init) !void {
 
         var args: [][]const u8 = parsed_input;
 
-        var redirect: Redirect = .RedirectNone;
+        var redirect_type: RedirectType = .RedirectNone;
         var redirect_index: ?usize = null;
         for (parsed_input, 0..parsed_input.len) |arg, index| {
             if ((std.mem.eql(u8, arg, ">")) or std.mem.eql(u8, arg, "1>")) {
-                redirect = .RedirectStdout;
+                redirect_type = .RedirectStdout;
                 redirect_index = index;
                 break;
             } else if (std.mem.eql(u8, arg, "2>")) {
-                redirect = .RedirectStderr;
+                redirect_type = .RedirectStderr;
                 redirect_index = index;
                 break;
             }
         }
 
         var redirect_file: ?[]const u8 = null;
-        if (redirect != .RedirectNone) {
+        if (redirect_type != .RedirectNone) {
             args = parsed_input[0..redirect_index.?];
             redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
         }
 
-        var writer_out: *std.Io.Writer = @constCast(stdout);
-        var writer_err: *std.Io.Writer = @constCast(stdout);
+        //var writer_out: *std.Io.Writer = @constCast(stdout);
+        //var writer_err: *std.Io.Writer = @constCast(stdout);
         var output_file: ?File = null;
+        var output_file_writer: ?std.Io.File.Writer = null;
         if (redirect_file != null) {
             output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
-            var output_file_writer = output_file.?.writer(io, &.{});
-            switch (redirect) {
-                .RedirectNone => {
-                    break;
-                },
-                .RedirectStdout => {
-                    writer_out = &output_file_writer.interface;
-                },
-                .RedirectStderr => {
-                    writer_err = &output_file_writer.interface;
-                },
-            }
+            output_file_writer = output_file.?.writer(io, &.{});
         }
+
+        const writer_out = switch (redirect_type) {
+            .RedirectNone => &stdout_writer.interface,
+            .RedirectStdout => &output_file_writer.?.interface,
+            .RedirectStderr => &stdout_writer.interface,
+        };
+
+        const writer_err = switch (redirect_type) {
+            .RedirectNone => &stdout_writer.interface,
+            .RedirectStdout => &stdout_writer.interface,
+            .RedirectStderr => &output_file_writer.?.interface,
+        };
+
         defer if (output_file != null) output_file.?.close(io);
 
         const command = args[0];

@@ -23,6 +23,7 @@ const RedirectType = enum {
     RedirectStdout,
     RedirectStdoutAppend,
     RedirectStderr,
+    RedirectStderrAppend,
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -72,6 +73,8 @@ pub fn main(init: std.process.Init) !void {
                 redirect_type = .RedirectStderr;
             } else if (std.mem.eql(u8, arg, ">>") or std.mem.eql(u8, arg, "1>>")) {
                 redirect_type = .RedirectStdoutAppend;
+            } else if (std.mem.eql(u8, arg, "2>>")) {
+                redirect_type = .RedirectStderrAppend;
             }
             if (redirect_type != .RedirectNone) {
                 redirect_index = index;
@@ -86,7 +89,7 @@ pub fn main(init: std.process.Init) !void {
             args = parsed_input[0..redirect_index.?];
             redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
 
-            if (redirect_type == .RedirectStdoutAppend) {
+            if (redirect_type == .RedirectStdoutAppend or redirect_type == .RedirectStderrAppend) {
                 output_file = Dir.openFile(Dir.cwd(), io, redirect_file.?, .{ .mode = .write_only }) catch (Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue);
                 output_file_writer = output_file.?.writer(io, &.{});
                 const file_stat = output_file.?.stat(io) catch continue;
@@ -103,6 +106,7 @@ pub fn main(init: std.process.Init) !void {
             .RedirectStdout => &output_file_writer.?.interface,
             .RedirectStdoutAppend => &output_file_writer.?.interface,
             .RedirectStderr => &stdout_writer.interface,
+            .RedirectStderrAppend => &stdout_writer.interface,
         };
 
         const writer_err = switch (redirect_type) {
@@ -110,6 +114,7 @@ pub fn main(init: std.process.Init) !void {
             .RedirectStdout => &stdout_writer.interface,
             .RedirectStdoutAppend => &stdout_writer.interface,
             .RedirectStderr => &output_file_writer.?.interface,
+            .RedirectStderrAppend => &output_file_writer.?.interface,
         };
 
         const command = args[0];

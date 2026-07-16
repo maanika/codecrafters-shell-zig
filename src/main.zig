@@ -21,6 +21,7 @@ const BuiltInCommand = enum {
 const RedirectType = enum {
     RedirectNone,
     RedirectStdout,
+    RedirectStdoutAppend,
     RedirectStderr,
 };
 
@@ -65,12 +66,14 @@ pub fn main(init: std.process.Init) !void {
         var redirect_type: RedirectType = .RedirectNone;
         var redirect_index: ?usize = null;
         for (parsed_input, 0..parsed_input.len) |arg, index| {
-            if ((std.mem.eql(u8, arg, ">")) or std.mem.eql(u8, arg, "1>")) {
+            if (std.mem.eql(u8, arg, ">") or std.mem.eql(u8, arg, "1>")) {
                 redirect_type = .RedirectStdout;
-                redirect_index = index;
-                break;
             } else if (std.mem.eql(u8, arg, "2>")) {
                 redirect_type = .RedirectStderr;
+            } else if (std.mem.eql(u8, arg, ">>") or std.mem.eql(u8, arg, "1>>")) {
+                redirect_type = .RedirectStdoutAppend;
+            }
+            if (redirect_type != .RedirectNone) {
                 redirect_index = index;
                 break;
             }
@@ -82,20 +85,30 @@ pub fn main(init: std.process.Init) !void {
         if (redirect_type != .RedirectNone) {
             args = parsed_input[0..redirect_index.?];
             redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
-            output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
-            output_file_writer = output_file.?.writer(io, &.{});
+
+            if (redirect_type == .RedirectStdoutAppend) {
+                output_file = Dir.openFile(Dir.cwd(), io, redirect_file.?, .{ .mode = .write_only }) catch (Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue);
+                output_file_writer = output_file.?.writer(io, &.{});
+                const file_stat = output_file.?.stat(io) catch continue;
+                output_file_writer.?.seekTo(file_stat.size) catch continue;
+            } else {
+                output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;
+                output_file_writer = output_file.?.writer(io, &.{});
+            }
         }
         defer if (output_file != null) output_file.?.close(io);
 
         const writer_out = switch (redirect_type) {
             .RedirectNone => &stdout_writer.interface,
             .RedirectStdout => &output_file_writer.?.interface,
+            .RedirectStdoutAppend => &output_file_writer.?.interface,
             .RedirectStderr => &stdout_writer.interface,
         };
 
         const writer_err = switch (redirect_type) {
             .RedirectNone => &stdout_writer.interface,
             .RedirectStdout => &stdout_writer.interface,
+            .RedirectStdoutAppend => &stdout_writer.interface,
             .RedirectStderr => &output_file_writer.?.interface,
         };
 

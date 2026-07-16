@@ -103,18 +103,14 @@ pub fn main(init: std.process.Init) !void {
 
         const writer_out = switch (redirect_type) {
             .RedirectNone => &stdout_writer.interface,
-            .RedirectStdout => &output_file_writer.?.interface,
-            .RedirectStdoutAppend => &output_file_writer.?.interface,
-            .RedirectStderr => &stdout_writer.interface,
-            .RedirectStderrAppend => &stdout_writer.interface,
+            .RedirectStdout, .RedirectStdoutAppend => &output_file_writer.?.interface,
+            .RedirectStderr, .RedirectStderrAppend => &stdout_writer.interface,
         };
 
         const writer_err = switch (redirect_type) {
             .RedirectNone => &stdout_writer.interface,
-            .RedirectStdout => &stdout_writer.interface,
-            .RedirectStdoutAppend => &stdout_writer.interface,
-            .RedirectStderr => &output_file_writer.?.interface,
-            .RedirectStderrAppend => &output_file_writer.?.interface,
+            .RedirectStdout, .RedirectStdoutAppend => &stdout_writer.interface,
+            .RedirectStderr, .RedirectStderrAppend => &output_file_writer.?.interface,
         };
 
         const command = args[0];

@@ -1,19 +1,21 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const command_parser = @import("command.zig");
+
 const assert = std.debug.assert;
 const File = std.Io.File;
 const Dir = std.Io.Dir;
-const command_parser = @import("command.zig");
+
+const MyErrors = error{
+    NotFound,
+};
+
 const BuiltInCommand = enum {
     exit,
     echo,
     type,
     pwd,
     cd,
-};
-
-const MyErrors = error{
-    NotFound,
 };
 
 const RedirectType = enum {

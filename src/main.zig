@@ -89,7 +89,7 @@ pub fn main(init: std.process.Init) !void {
             if (redirect_type == .RedirectStdoutAppend) {
                 output_file = Dir.openFile(Dir.cwd(), io, redirect_file.?, .{ .mode = .write_only }) catch (Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue);
                 output_file_writer = output_file.?.writer(io, &.{});
-                const file_stat = output_file.?.stat(io) catch continue;
+                const file_stat = try output_file.?.stat(io) catch continue;
                 output_file_writer.?.seekTo(file_stat.size) catch continue;
             } else {
                 output_file = Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue;

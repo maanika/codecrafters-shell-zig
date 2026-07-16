@@ -88,15 +88,13 @@ pub fn main(init: std.process.Init) !void {
         if (redirect_type != .RedirectNone) {
             args = parsed_input[0..redirect_index.?];
             redirect_file = if (redirect_index.? + 1 < parsed_input.len) parsed_input[redirect_index.? + 1] else continue;
-
-            output_file = Dir.openFile(Dir.cwd(), io, redirect_file.?, .{ .mode = .write_only })
-                catch (Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue);
+            output_file = Dir.openFile(Dir.cwd(), io, redirect_file.?, .{ .mode = .write_only }) catch (Dir.createFile(Dir.cwd(), io, redirect_file.?, .{}) catch continue);
             output_file_writer = output_file.?.writer(io, &.{});
-            const file_stat = output_file.?.stat(io) catch continue;
             if (redirect_type == .RedirectStdoutAppend or redirect_type == .RedirectStderrAppend) {
-                output_file_writer.?.seekTo(file_stat.size) catch continue;
+                const file_stat = try output_file.?.stat(io);
+                try output_file_writer.?.seekTo(file_stat.size);
             } else {
-                output_file_writer.?.seekTo(0) catch continue;
+                try output_file.?.setLength(io, 0);
             }
         }
         defer if (output_file != null) output_file.?.close(io);
